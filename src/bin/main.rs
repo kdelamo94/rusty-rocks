@@ -1,7 +1,7 @@
 #[macro_use] extern crate diesel;
 extern crate rusty_rocks;
 
-use actix_web::{get, web, App, HttpServer, Responder, HttpResponse, Result};
+use actix_web::{get, middleware, web, App, HttpServer, Responder, HttpResponse, HttpRequest, Result};
 
 use rusty_rocks::establish_connection;
 use rusty_rocks::jwt::JWTToken;
@@ -19,7 +19,6 @@ async fn index() -> impl Responder {
 // TODO: Diesel vs SQL Alchemy for database interface
 #[get("/auth")]
 async fn authorize() -> Result<HttpResponse> {
-
     let header = json!({
         "alg": "HS256",
         "typ": "JWT"
@@ -45,7 +44,10 @@ async fn main() -> std::io::Result<()> {
 
     let connection = establish_connection();
 
-    HttpServer::new(|| App::new().service(index).service(authorize))
+    HttpServer::new(|| App::new().wrap(
+            middleware::DefaultHeaders::new().header("Access-Control-Allow-Origin", "*")
+    )
+        .service(index).service(authorize))
         .bind("127.0.0.1:8080")?
         .run()
         .await
