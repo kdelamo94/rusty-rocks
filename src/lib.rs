@@ -1,12 +1,15 @@
 #[macro_use] 
 extern crate diesel;
-extern crate dotenv;
+//extern crate dotenv;
 
 
 use diesel::prelude::*;
 use diesel::PgConnection;
 use dotenv::dotenv;
 use std::env;
+use actix::MailboxError;
+use actix::prelude::*;
+use sha2::{ Sha256, Digest };
 pub mod schema;
 pub mod models;
 
@@ -108,41 +111,42 @@ pub mod jwt {
     }
 }
 
-// pub struct JWTToken {
-//     header: serde_json::Value,
-//     payload: serde_json::Value,
-//     signature: String
-// }
+pub struct AuthenticateUser {
+    pub username: String,
+    pub password: String
+}
 
-// impl JWTToken {
+impl Message for AuthenticateUser {
+    type Result = Result<User, MailboxError>;
+}
 
-//     pub fn new(header: &str, payload: &str) -> JWTToken {
-//         JWTToken{
-//             header: serde_json::from_str(header).unwrap(),
-//             payload: serde_json::from_str(payload).unwrap(),
-//             signature: String::new()
-//         }
-//     }
+pub struct DbExecutor(pub PgConnection);
 
-//     pub fn get_encoded_token(&self) -> String {
-//         const SECRET_KEY: &str = "my-super-secret-key";
+impl Actor for DbExecutor {
+    type Context = SyncContext<Self>;
+}
 
-//         let encoded_header = base64::encode_config(&self.header.to_string(), base64::URL_SAFE);
-//         let encoded_payload = base64::encode_config(&self.payload.to_string(), base64::URL_SAFE);
+impl Handler<AuthenticateUser> for DbExecutor {
+    type Result = Result<User, MailboxError>;
+    
+    fn handle(&mut self, msg: AuthenticateUser, _: &mut Self::Context) -> Self::Result {
+        use self::schema::rusty_users::dsl::*;
+        
+        println!("message: user {} password {}", msg.username, msg.password);
 
-//         let mut hasher = Sha256::new();
-//         hasher.input(
-//             format!(
-//                 "{}{}{}",
-//                 encoded_header,
-//                 encoded_payload,
-//                 SECRET_KEY
-//             )
-//         );
+        let user: User = rusty_users.filter(rusty_user_name.eq(msg.username)).load::<User>(&self.0).unwrap()[0].clone();
 
-//         format!("{:x}", hasher.result())
-//     }
-// }
+        let mut hasher = Sha256::new();
+        hasher.input(msg.password.as_bytes());
+        let password = format!("{:x}", hasher.result());
+        if user.rusty_password == password {
+            Ok(user)
+        } else {
+            Err(MailboxError::from(MailboxError::Closed))
+        }
+    }
+    
+}
 
 pub fn establish_connection() -> PgConnection {
     dotenv().ok();
@@ -156,12 +160,13 @@ pub fn establish_connection() -> PgConnection {
 
 
 
-pub fn create_user<'a>(conn: &PgConnection, first_name: &'a str, last_name: &'a str, rusty_password: &'a str, rusty_role: &'a str) -> User {
+pub fn create_user<'a>(conn: &PgConnection, first_name: &'a str, last_name: &'a str, rusty_user_name: &'a str, rusty_password: &'a str, rusty_role: &'a str) -> User {
     use schema::rusty_users;
 
     let new_user = NewUser {
         first_name,
         last_name,
+        rusty_user_name,
         rusty_password,
         rusty_role
     };

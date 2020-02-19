@@ -21,6 +21,12 @@ fn main(){
     stdin().read_line(&mut last_name).unwrap();
     let last_name = &last_name[..(last_name.len() -1 )];
 
+    println!("User Name? ");
+    let mut user_name = String::new();
+
+    stdin().read_line(&mut user_name).unwrap();
+    let user_name = &user_name[..(user_name.len() -1 )];
+
     println!("Password? ");
     let mut password = String::new();
     stdin().read_line(&mut password);
@@ -32,7 +38,7 @@ fn main(){
 
     let user_role = "user";
 
-    let user = create_user(&connection, first_name, last_name, password, user_role);
+    let user = create_user(&connection, first_name, last_name, user_name, password, user_role);
 
     println!("Saved new user {} whose id is {}", user.first_name, user.id)
 

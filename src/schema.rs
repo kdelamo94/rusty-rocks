@@ -5,6 +5,7 @@ table! {
         last_name -> Varchar,
         rusty_password -> Varchar,
         rusty_role -> Varchar,
+        rusty_user_name -> Varchar,
     }
 }
 
