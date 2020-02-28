@@ -3,6 +3,7 @@ extern crate rusty_rocks;
 use actix_cors::Cors;
 use chrono::DateTime;
 use actix_web::{
+    Error,
     http,
     get,
     post,
@@ -42,15 +43,15 @@ struct AuthorizationRequest {
 }
 
 #[post("/auth")]
-async fn authorize(datum: web::Data<State>, body: web::Json<AuthorizationRequest>) -> Result<HttpResponse> {
+async fn authorize(datum: web::Data<State>, body: web::Json<AuthorizationRequest>) -> Result<HttpResponse, Error> {
 
-
+    println!("Authorization Function Fired");
 
     let secret_key = "my-super-secret-key";
 
     let db = &datum.addr;
 
-    let user = db.send(AuthenticateUser{
+    let user: rusty_rocks::models::User = db.send(AuthenticateUser{
         username: body.username.clone(),
         password: body.password.clone()
     }).await??;
