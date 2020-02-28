@@ -10,6 +10,7 @@ use std::env;
 use actix::MailboxError;
 use actix::prelude::*;
 use sha2::{ Sha256, Digest };
+use actix_web::{Error};
 pub mod schema;
 pub mod models;
 
@@ -117,7 +118,7 @@ pub struct AuthenticateUser {
 }
 
 impl Message for AuthenticateUser {
-    type Result = Result<User, MailboxError>;
+    type Result = Result<User, UserAuthenticationError>;
 }
 
 pub struct DbExecutor(pub PgConnection);
@@ -126,24 +127,49 @@ impl Actor for DbExecutor {
     type Context = SyncContext<Self>;
 }
 
+#[derive(std::fmt::Debug)]
+pub struct UserAuthenticationError {
+    message: String
+}
+
+impl std::fmt::Display for UserAuthenticationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "Error Authenticating User: {}", self.message)
+    }
+}
+impl std::error::Error for UserAuthenticationError{
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        None
+    }
+}
+
+impl actix_web::error::ResponseError for UserAuthenticationError{}
+
 impl Handler<AuthenticateUser> for DbExecutor {
-    type Result = Result<User, MailboxError>;
+    type Result = Result<User, UserAuthenticationError>;
     
     fn handle(&mut self, msg: AuthenticateUser, _: &mut Self::Context) -> Self::Result {
         use self::schema::rusty_users::dsl::*;
         
         println!("message: user {} password {}", msg.username, msg.password);
 
-        let user: User = rusty_users.filter(rusty_user_name.eq(msg.username)).load::<User>(&self.0).unwrap()[0].clone();
+        let user: Option<User> = rusty_users.filter(rusty_user_name.eq(msg.username)).load::<User>(&self.0).unwrap().pop().clone();
 
         let mut hasher = Sha256::new();
         hasher.input(msg.password.as_bytes());
         let password = format!("{:x}", hasher.result());
-        if user.rusty_password == password {
-            Ok(user)
-        } else {
-            Err(MailboxError::from(MailboxError::Closed))
+
+        match user {
+            Some(user) => {
+                if user.rusty_password == password {
+                    Ok(user)
+                } else {
+                    Err(UserAuthenticationError { message: String::from("Mismatching Passwords")})
+                }
+            },
+            None => Err(UserAuthenticationError { message: String::from("No User Found")})
         }
+
     }
     
 }
